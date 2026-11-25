@@ -12,43 +12,49 @@ from similarity import SimilarityResult, calculate_cosine_similarity
 from word_bank import WORD_BANK
 
 
-st.set_page_config(page_title="Word Signal", page_icon="W", layout="wide")
+st.set_page_config(page_title="단어 유사도 게임", page_icon="🎯", layout="wide", initial_sidebar_state="expanded")
 
 st.markdown(
     """
     <style>
     @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap');
-    :root { --ink:#17202a; --muted:#6d747c; --line:#e8e4dd; --paper:#fbfaf7; --accent:#ff694a; }
+    :root { --ink:#17213b; --muted:#74809b; --line:#dce3f1; --paper:#f4f6fb; --panel:#e9eef8; --card:#fff; --accent:#6541ed; --orange:#c65d05; }
+    header[data-testid='stHeader'] { display:block; height:2.25rem; background:transparent; }
+    #MainMenu, footer { display:none; }
+    button[title='Collapse sidebar'] { display:none!important; }
+    [data-testid='collapsedControl'], button[title='Expand sidebar'] { display:flex!important; visibility:visible!important; opacity:1!important; }
     .stApp { background:var(--paper); color:var(--ink); }
-    [data-testid="stHeader"] { background:transparent; }
-    [data-testid="stSidebar"] { background:#f2efe9; border-right:1px solid var(--line); }
-    .block-container { max-width:1180px; padding-top:2.5rem; padding-bottom:4rem; }
+    [data-testid="stSidebar"] { background:var(--panel); border-right:1px solid #d9e1f0; }
+    [data-testid="stSidebar"] > div:first-child { padding:2.4rem 1.15rem; }
+    [data-testid="stSidebar"] h2 { color:var(--ink)!important; font-size:1.15rem!important; margin:0 0 1.3rem; }
+    [data-testid="stSidebar"] label { color:var(--ink); font-size:.74rem; }
+    .block-container { max-width:980px; padding-top:2.8rem!important; padding-bottom:4rem; }
     h1,h2,h3,p,button,input { font-family:'Space Grotesk', sans-serif; }
-    h1 { letter-spacing:-.055em; font-size:clamp(2.3rem,5vw,4.6rem)!important; line-height:.95!important; margin-bottom:.5rem!important; white-space:pre-line; }
-    h2 { letter-spacing:-.035em; }
-    .brand { display:flex; justify-content:space-between; align-items:center; margin-bottom:3rem; border-bottom:1px solid var(--line); padding-bottom:1rem; }
+    h1 { color:var(--ink)!important; letter-spacing:-.055em; font-size:2.25rem!important; line-height:1.15!important; margin-bottom:.3rem!important; white-space:pre-line; }
+    h2 { color:var(--ink)!important; letter-spacing:-.035em; }
+    .brand { display:flex; justify-content:space-between; align-items:center; margin-bottom:1.2rem; border-bottom:1px solid var(--line); padding-bottom:1rem; }
     .brand-name,.brand-status,.score-label,.score-note,.section-label,.history-score { font-family:'DM Mono',monospace; }
-    .brand-name { font-size:.78rem; letter-spacing:.12em; font-weight:500; }
-    .brand-status { color:var(--accent); font-size:.68rem; letter-spacing:.08em; text-transform:uppercase; }
-    .eyebrow,.section-label { color:var(--accent); font-size:.72rem; letter-spacing:.12em; text-transform:uppercase; }
-    .lede { max-width:620px; color:var(--muted); font-size:1.03rem; line-height:1.65; margin-bottom:2.3rem; }
-    .target-card { background:var(--ink); color:white; border-radius:18px; padding:1.45rem 1.6rem; margin:1rem 0 1.3rem; }
-    .target-label { color:#aeb7bd; font-family:'DM Mono',monospace; font-size:.67rem; letter-spacing:.1em; text-transform:uppercase; }
-    .target-word { font-size:2.3rem; font-weight:600; letter-spacing:-.05em; margin-top:.35rem; }
-    .score-card { background:white; border:1px solid var(--line); border-radius:18px; padding:1.4rem 1.6rem; margin:1rem 0; }
+    .brand-name { color:var(--ink); font-size:.78rem; letter-spacing:.12em; font-weight:500; }
+    .brand-status { color:#579b72; font-size:.68rem; letter-spacing:.08em; text-transform:uppercase; }
+    .eyebrow,.section-label { color:#8d78df; font-size:.72rem; letter-spacing:.12em; text-transform:uppercase; }
+    .lede { max-width:620px; color:var(--muted); font-size:.9rem; line-height:1.65; margin-bottom:1.3rem; }
+    .target-card { background:linear-gradient(110deg,#fff,#f0f3fb); border:1px solid #d6deed; color:var(--ink); border-radius:15px; padding:1.25rem 1.35rem; margin:1rem 0 1.3rem; }
+    .target-label { color:#7b86a0; font-family:'DM Mono',monospace; font-size:.67rem; letter-spacing:.1em; text-transform:uppercase; }
+    .target-word { color:var(--ink); font-size:2.3rem; font-weight:700; letter-spacing:-.05em; margin-top:.35rem; }
+    .score-card { background:var(--card); border:1px solid var(--line); border-radius:15px; padding:1.35rem 1.45rem; margin:1rem 0; box-shadow:0 5px 15px rgba(46,66,110,.04); }
     .score-label { color:var(--muted); font-size:.7rem; text-transform:uppercase; letter-spacing:.1em; }
-    .score-value { color:var(--accent); font-size:3.5rem; font-weight:700; letter-spacing:-.07em; line-height:1.1; }
+    .score-value { color:var(--orange); font-size:3.5rem; font-weight:700; letter-spacing:-.07em; line-height:1.1; }
     .score-note { color:var(--muted); font-size:.72rem; margin-top:.35rem; }
     .section-label { color:var(--muted); margin:1.8rem 0 .65rem; }
-    .history-row { display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--line); padding:.75rem 0; }
+    .history-row { display:flex; justify-content:space-between; align-items:center; background:var(--card); border:1px solid var(--line); border-radius:11px; padding:.75rem .8rem; margin:.45rem 0; }
     .history-word { font-weight:600; }
     .history-score { color:var(--accent); font-size:.82rem; }
     .hint { color:var(--muted); font-size:.88rem; }
-    [data-testid="stMetric"] { background:white; border:1px solid var(--line); border-radius:14px; padding:1rem 1.1rem; }
+    [data-testid="stMetric"] { background:var(--card); border:1px solid var(--line); border-radius:13px; padding:1rem 1.1rem; box-shadow:0 5px 15px rgba(46,66,110,.04); }
     [data-testid="stMetricLabel"] { font-family:'DM Mono',monospace; font-size:.68rem; text-transform:uppercase; letter-spacing:.08em; }
     [data-testid="stMetricValue"] { font-family:'Space Grotesk',sans-serif; }
-    .stButton > button { border-radius:10px; border:1px solid var(--ink); font-weight:600; }
-    div[data-testid="stButton"] button[kind="primary"] { background:var(--accent); border-color:var(--accent); }
+    .stButton > button { border-radius:10px; border:0; background:var(--accent); color:white; font-weight:700; min-height:2.8rem; }
+    .stButton > button:hover { background:#5534d1; box-shadow:0 8px 18px rgba(101,65,237,.2); }
     </style>
     """,
     unsafe_allow_html=True,
@@ -112,10 +118,11 @@ if "history" not in st.session_state:
     st.session_state.history = []
 
 with st.sidebar:
-    st.markdown("## WORD SIGNAL")
-    st.caption("A word. A hunch. One hidden answer.")
+    st.markdown('<div class="eyebrow">GAME SETTINGS</div>', unsafe_allow_html=True)
+    st.header("설정")
+    st.caption("한 단어의 힌트로 숨겨진 제시어를 추리해보세요.")
     view_mode = st.radio("화면 역할", ("A · 제시어 확인", "참가자 · 제시어 추측"))
-    model_name = st.text_input("Embedding model", value=DEFAULT_MODEL_NAME)
+    model_name = st.selectbox("임베딩 모델", options=[DEFAULT_MODEL_NAME], format_func=lambda _: "BGE-M3")
     st.divider()
     if st.button("새 제시어 뽑기", use_container_width=True):
         initialize_game()
