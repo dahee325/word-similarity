@@ -6,7 +6,7 @@ import html
 
 import streamlit as st
 
-from comparison_corpus import KOREAN_SENTENCES
+from corpus_loader import load_large_korean_corpus, load_small_corpus
 from comparison_service import (
     ModelComparisonResult,
     compare_bge,
@@ -86,17 +86,24 @@ def get_bge_model(model_name: str):
 
 
 @st.cache_resource(show_spinner="Word2Vec을 학습하고 있어요...")
-def get_word2vec(vector_size: int, window: int, epochs: int):
-    """Train and cache Word2Vec with the practice corpus."""
+def get_word2vec(corpus: tuple[str, ...], vector_size: int, window: int, epochs: int):
+    """Train and cache Word2Vec with the selected corpus."""
 
-    return train_word2vec(KOREAN_SENTENCES, vector_size=vector_size, window=window, epochs=epochs)
+    return train_word2vec(corpus, vector_size=vector_size, window=window, epochs=epochs)
 
 
 @st.cache_resource(show_spinner="FastText를 학습하고 있어요...")
-def get_fasttext(vector_size: int, window: int, epochs: int):
-    """Train and cache FastText with the practice corpus."""
+def get_fasttext(corpus: tuple[str, ...], vector_size: int, window: int, epochs: int):
+    """Train and cache FastText with the selected corpus."""
 
-    return train_fasttext(KOREAN_SENTENCES, vector_size=vector_size, window=window, epochs=epochs)
+    return train_fasttext(corpus, vector_size=vector_size, window=window, epochs=epochs)
+
+
+@st.cache_data(show_spinner="대규모 한국어 말뭉치를 스트리밍으로 준비하고 있어요...")
+def get_large_corpus() -> tuple[str, ...]:
+    """Cache a bounded Korean Wikipedia sample for local experiments."""
+
+    return tuple(load_large_korean_corpus())
 
 
 def show_result(result: ModelComparisonResult, rank: int, best: bool = False) -> None:
@@ -105,7 +112,7 @@ def show_result(result: ModelComparisonResult, rank: int, best: bool = False) ->
     similarity = result.similarity
     model_name = html.escape(result.model_name)
     score = similarity.score_0_to_100
-    accent = "#c65d05" if result.model_name == "BGE-M3" else "#118b83"
+    accent = "#c65d05" if result.model_name.startswith("BGE-M3") else "#118b83"
     best_class = " best" if best else ""
     st.markdown(
         f"""
@@ -140,12 +147,17 @@ with st.sidebar:
         key="model_choice",
     )
     st.caption("전체 비교 또는 원하는 모델 하나를 선택하세요.")
+    corpus_choice = st.selectbox(
+        "학습 말뭉치",
+        options=["두 말뭉치 비교", "작은 실습 말뭉치", "대규모 한국어 말뭉치"],
+        key="corpus_choice",
+    )
     vector_size = st.slider("Word2Vec/FastText 벡터 차원", 20, 200, 100, step=20)
     window = st.slider("주변 단어 window", 1, 5, 3)
     epochs = st.slider("학습 반복 횟수", 20, 200, 100, step=20)
     st.divider()
-    st.caption("Word2Vec과 FastText는 31개의 작은 실습 말뭉치로 직접 학습합니다.")
-    if st.button("실습 말뭉치 보기", use_container_width=True):
+    st.caption("Word2Vec과 FastText가 작은 말뭉치와 Wikipedia 기반 말뭉치에서 어떻게 달라지는지 비교합니다.")
+    if st.button("작은 말뭉치 보기", use_container_width=True):
         st.session_state["show_corpus"] = not st.session_state.get("show_corpus", False)
 
 
@@ -174,24 +186,35 @@ with input_right:
 
 if st.session_state.get("show_corpus"):
     with st.expander("실습 말뭉치", expanded=True):
-        st.write(f"문장 수: {len(KOREAN_SENTENCES)}")
-        st.code("\n".join(KOREAN_SENTENCES))
+        small_corpus = load_small_corpus()
+        st.write(f"문장 수: {len(small_corpus)}")
+        st.code("\n".join(small_corpus))
 
 if run_comparison:
     try:
         results: list[ModelComparisonResult] = []
         selected_model = st.session_state["model_choice"]
+        selected_corpus = st.session_state["corpus_choice"]
         compare_all = selected_model == "전체 모델 비교"
-        with st.spinner(f"{selected_model} 임베딩을 계산하고 있어요..."):
-            if compare_all or selected_model == "BGE-M3":
-                bge = get_bge_model(DEFAULT_MODEL_NAME)
-                results.append(compare_bge(bge, first_text, second_text))
-            if compare_all or selected_model == "Word2Vec":
-                word2vec = get_word2vec(vector_size, window, epochs)
-                results.append(compare_vectors("Word2Vec", embed_traditional_text(word2vec, first_text), embed_traditional_text(word2vec, second_text)))
-            if compare_all or selected_model == "FastText":
-                fasttext = get_fasttext(vector_size, window, epochs)
-                results.append(compare_vectors("FastText", embed_traditional_text(fasttext, first_text), embed_traditional_text(fasttext, second_text)))
+        if selected_corpus == "두 말뭉치 비교":
+            corpus_sets = [("소규모", tuple(load_small_corpus())), ("대규모 Wikipedia", get_large_corpus())]
+        elif selected_corpus == "작은 실습 말뭉치":
+            corpus_sets = [("소규모", tuple(load_small_corpus()))]
+        else:
+            corpus_sets = [("대규모 Wikipedia", get_large_corpus())]
+
+        with st.spinner(f"{selected_model} · {selected_corpus} 결과를 계산하고 있어요..."):
+            for corpus_label, corpus in corpus_sets:
+                if compare_all or selected_model == "BGE-M3":
+                    bge = get_bge_model(DEFAULT_MODEL_NAME)
+                    bge_result = compare_bge(bge, first_text, second_text)
+                    results.append(ModelComparisonResult(f"BGE-M3 · {corpus_label}", bge_result.similarity, bge_result.first_embedding, bge_result.second_embedding))
+                if compare_all or selected_model == "Word2Vec":
+                    word2vec = get_word2vec(corpus, vector_size, window, epochs)
+                    results.append(compare_vectors(f"Word2Vec · {corpus_label}", embed_traditional_text(word2vec, first_text), embed_traditional_text(word2vec, second_text)))
+                if compare_all or selected_model == "FastText":
+                    fasttext = get_fasttext(corpus, vector_size, window, epochs)
+                    results.append(compare_vectors(f"FastText · {corpus_label}", embed_traditional_text(fasttext, first_text), embed_traditional_text(fasttext, second_text)))
         st.session_state["comparison_results"] = results
         st.rerun()
     except ValueError as error:
