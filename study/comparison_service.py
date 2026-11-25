@@ -14,6 +14,41 @@ from similarity_service import SimilarityResult, calculate_cosine_similarity
 
 
 TOKEN_PATTERN = re.compile(r"[가-힣A-Za-z0-9]+")
+KOREAN_PARTICLES = (
+    "으로부터",
+    "에서부터",
+    "으로",
+    "한테",
+    "까지",
+    "부터",
+    "처럼",
+    "보다",
+    "만큼",
+    "에서",
+    "에게",
+    "와",
+    "과",
+    "은",
+    "는",
+    "이",
+    "가",
+    "을",
+    "를",
+    "에",
+    "도",
+    "만",
+    "의",
+)
+
+
+def normalize_token(token: str) -> str:
+    """Remove a small set of Korean particles for this learning tokenizer."""
+
+    for particle in sorted(KOREAN_PARTICLES, key=len, reverse=True):
+        base = token.removesuffix(particle)
+        if base != token and len(base) >= 2:
+            return base
+    return token
 
 
 @dataclass(frozen=True)
@@ -38,9 +73,9 @@ class ModelComparisonResult:
 
 
 def tokenize(text: str) -> list[str]:
-    """공백과 문장부호를 기준으로 실습용 토큰 목록을 만든다."""
+    """Tokenize text and normalize common Korean particles for practice."""
 
-    return TOKEN_PATTERN.findall(text.lower())
+    return [normalize_token(token) for token in TOKEN_PATTERN.findall(text.lower())]
 
 
 def prepare_sentences(sentences: Sequence[str]) -> list[list[str]]:
@@ -108,7 +143,7 @@ def embed_traditional_text(model: Any, text: str) -> TraditionalEmbeddingResult:
             missing.append(token)
 
     if missing:
-        raise ValueError(f"Word2Vec 말뭉치에 없는 토큰입니다: {', '.join(missing)}")
+        raise ValueError(f"선택한 학습 말뭉치에 없는 토큰입니다: {', '.join(missing)}")
 
     vector = np.mean(vectors, axis=0).astype(np.float32)
     return TraditionalEmbeddingResult(

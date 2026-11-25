@@ -164,6 +164,7 @@ with st.sidebar:
 st.markdown('<div class="page-head"><div><div class="eyebrow">EMBEDDING MODEL LAB · STEP 03</div><h1>임베딩 모델 비교</h1><div class="subtitle">같은 단어도 모델에 따라 얼마나 다르게 가까워질까요?</div><span class="badge">BGE-M3 · Word2Vec · FastText</span></div><div class="top-mark">🧪</div></div>', unsafe_allow_html=True)
 
 comparison_results = st.session_state.get("comparison_results", [])
+comparison_errors = st.session_state.get("comparison_errors", [])
 best_score = max((item.similarity.score_0_to_100 for item in comparison_results), default=None)
 metric1, metric2 = st.columns(2)
 with metric1:
@@ -191,11 +192,14 @@ if st.session_state.get("show_corpus"):
         st.code("\n".join(small_corpus))
 
 if run_comparison:
+    results: list[ModelComparisonResult] = []
+    errors: list[str] = []
+    st.session_state["comparison_results"] = []
+    st.session_state["comparison_errors"] = []
+    selected_model = st.session_state["model_choice"]
+    selected_corpus = st.session_state["corpus_choice"]
+    compare_all = selected_model == "전체 모델 비교"
     try:
-        results: list[ModelComparisonResult] = []
-        selected_model = st.session_state["model_choice"]
-        selected_corpus = st.session_state["corpus_choice"]
-        compare_all = selected_model == "전체 모델 비교"
         if selected_corpus == "두 말뭉치 비교":
             corpus_sets = [("소규모", tuple(load_small_corpus())), ("대규모 Wikipedia", get_large_corpus())]
         elif selected_corpus == "작은 실습 말뭉치":
@@ -206,23 +210,36 @@ if run_comparison:
         with st.spinner(f"{selected_model} · {selected_corpus} 결과를 계산하고 있어요..."):
             for corpus_label, corpus in corpus_sets:
                 if compare_all or selected_model == "BGE-M3":
-                    bge = get_bge_model(DEFAULT_MODEL_NAME)
-                    bge_result = compare_bge(bge, first_text, second_text)
-                    results.append(ModelComparisonResult(f"BGE-M3 · {corpus_label}", bge_result.similarity, bge_result.first_embedding, bge_result.second_embedding))
+                    try:
+                        bge = get_bge_model(DEFAULT_MODEL_NAME)
+                        bge_result = compare_bge(bge, first_text, second_text)
+                        results.append(ModelComparisonResult(f"BGE-M3 · {corpus_label}", bge_result.similarity, bge_result.first_embedding, bge_result.second_embedding))
+                    except Exception as error:
+                        errors.append(f"BGE-M3 · {corpus_label}: {error}")
                 if compare_all or selected_model == "Word2Vec":
-                    word2vec = get_word2vec(corpus, vector_size, window, epochs)
-                    results.append(compare_vectors(f"Word2Vec · {corpus_label}", embed_traditional_text(word2vec, first_text), embed_traditional_text(word2vec, second_text)))
+                    try:
+                        word2vec = get_word2vec(corpus, vector_size, window, epochs)
+                        results.append(compare_vectors(f"Word2Vec · {corpus_label}", embed_traditional_text(word2vec, first_text), embed_traditional_text(word2vec, second_text)))
+                    except Exception as error:
+                        errors.append(f"Word2Vec · {corpus_label}: {error}")
                 if compare_all or selected_model == "FastText":
-                    fasttext = get_fasttext(corpus, vector_size, window, epochs)
-                    results.append(compare_vectors(f"FastText · {corpus_label}", embed_traditional_text(fasttext, first_text), embed_traditional_text(fasttext, second_text)))
-        st.session_state["comparison_results"] = results
-        st.rerun()
-    except ValueError as error:
-        st.warning(str(error))
+                    try:
+                        fasttext = get_fasttext(corpus, vector_size, window, epochs)
+                        results.append(compare_vectors(f"FastText · {corpus_label}", embed_traditional_text(fasttext, first_text), embed_traditional_text(fasttext, second_text)))
+                    except Exception as error:
+                        errors.append(f"FastText · {corpus_label}: {error}")
     except Exception as error:
-        st.error("모델 학습 또는 비교 중 오류가 발생했습니다.")
-        st.exception(error)
+        errors.append(f"말뭉치 준비 중 오류: {error}")
 
+    st.session_state["comparison_results"] = results
+    st.session_state["comparison_errors"] = errors
+    st.rerun()
+
+
+if comparison_errors:
+    st.warning("일부 모델은 입력 단어가 해당 말뭉치에 없어 계산하지 못했습니다.")
+    for comparison_error in comparison_errors:
+        st.error(comparison_error)
 
 if comparison_results:
     best_result = max(comparison_results, key=lambda item: item.similarity.score_0_to_100)
