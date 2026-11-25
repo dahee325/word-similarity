@@ -18,6 +18,9 @@ from comparison_service import (
 from embedding_service import DEFAULT_MODEL_NAME, load_embedding_model
 
 
+TOKENIZER_CACHE_VERSION = "ko-particle-normalization-v1"
+
+
 st.set_page_config(page_title="단어 유사도 모델 비교", page_icon="🧪", layout="wide", initial_sidebar_state="expanded")
 
 st.markdown(
@@ -86,15 +89,15 @@ def get_bge_model(model_name: str):
 
 
 @st.cache_resource(show_spinner="Word2Vec을 학습하고 있어요...")
-def get_word2vec(corpus: tuple[str, ...], vector_size: int, window: int, epochs: int):
-    """Train and cache Word2Vec with the selected corpus."""
+def get_word2vec(corpus: tuple[str, ...], vector_size: int, window: int, epochs: int, tokenizer_cache_version: str):
+    """Train and cache Word2Vec with the selected corpus and tokenizer version."""
 
     return train_word2vec(corpus, vector_size=vector_size, window=window, epochs=epochs)
 
 
 @st.cache_resource(show_spinner="FastText를 학습하고 있어요...")
-def get_fasttext(corpus: tuple[str, ...], vector_size: int, window: int, epochs: int):
-    """Train and cache FastText with the selected corpus."""
+def get_fasttext(corpus: tuple[str, ...], vector_size: int, window: int, epochs: int, tokenizer_cache_version: str):
+    """Train and cache FastText with the selected corpus and tokenizer version."""
 
     return train_fasttext(corpus, vector_size=vector_size, window=window, epochs=epochs)
 
@@ -218,13 +221,13 @@ if run_comparison:
                         errors.append(f"BGE-M3 · {corpus_label}: {error}")
                 if compare_all or selected_model == "Word2Vec":
                     try:
-                        word2vec = get_word2vec(corpus, vector_size, window, epochs)
+                        word2vec = get_word2vec(corpus, vector_size, window, epochs, TOKENIZER_CACHE_VERSION)
                         results.append(compare_vectors(f"Word2Vec · {corpus_label}", embed_traditional_text(word2vec, first_text), embed_traditional_text(word2vec, second_text)))
                     except Exception as error:
                         errors.append(f"Word2Vec · {corpus_label}: {error}")
                 if compare_all or selected_model == "FastText":
                     try:
-                        fasttext = get_fasttext(corpus, vector_size, window, epochs)
+                        fasttext = get_fasttext(corpus, vector_size, window, epochs, TOKENIZER_CACHE_VERSION)
                         results.append(compare_vectors(f"FastText · {corpus_label}", embed_traditional_text(fasttext, first_text), embed_traditional_text(fasttext, second_text)))
                     except Exception as error:
                         errors.append(f"FastText · {corpus_label}: {error}")
